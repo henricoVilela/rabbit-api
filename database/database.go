@@ -16,7 +16,7 @@ var db *mongo.Database
 type AuditLog struct {
 	ID          primitive.ObjectID `bson:"_id,omitempty"`
 	UserId      string             `bson:"userId"`
-	UserAgent   string             `bson:"UserAgent"`
+	UserAgent   string             `bson:"userAgent"`
 	Application string             `bson:"application"`
 	Message     string             `bson:"message"`
 	Timestamp   time.Time          `bson:"timestamp"`
@@ -68,4 +68,30 @@ func InsertAuditLog(log AuditLog) error {
 	})
 
 	return err
+}
+
+func GetAuditLogs() ([]AuditLog, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	cursor, err := db.Collection("auditLogs").Find(ctx, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var logs []AuditLog
+	for cursor.Next(ctx) {
+		var log AuditLog
+		if err := cursor.Decode(&log); err != nil {
+			return nil, err
+		}
+		logs = append(logs, log)
+	}
+
+	if err := cursor.Err(); err != nil {
+		return nil, err
+	}
+
+	return logs, nil
 }

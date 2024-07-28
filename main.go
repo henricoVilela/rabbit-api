@@ -51,6 +51,17 @@ func SendNotification(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
 }
 
+func ListAuditLogs(w http.ResponseWriter, r *http.Request) {
+	logs, err := database.GetAuditLogs()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(logs)
+}
+
 func main() {
 	var err error
 
@@ -64,7 +75,7 @@ func main() {
 
 	// Register the /send endpoint with the SendNotification handler
 	r.HandleFunc("/send", SendNotification).Methods("POST")
-
+	r.HandleFunc("/auditlogs", ListAuditLogs).Methods("GET")
 	// Start the HTTP server
 	log.Println("Starting server on :8080")
 	if err := http.ListenAndServe(":8080", r); err != nil {
