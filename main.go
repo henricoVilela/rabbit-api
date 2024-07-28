@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/mux"
+	"henricovilela.com/rabbit_api/database"
 )
 
 type Notification struct {
@@ -23,8 +25,25 @@ func SendNotification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Create the audit log entry
+	auditLog := database.AuditLog{
+		UserId:      notification.UserId,
+		Application: notification.Application,
+		Message:     notification.Message,
+		Timestamp:   time.Now(),
+		IP:          r.RemoteAddr,
+		UserAgent:   r.UserAgent(),
+	}
+
 	// Log the received notification
 	log.Printf("Received notification: %+v", notification)
+
+	// Start a goroutine to insert the audit log into MongoDB asynchronously
+	go func() {
+		if err := database.InsertAuditLog(auditLog); err != nil {
+			log.Printf("Failed to save audit log: %v", err)
+		}
+	}()
 
 	// Send a response
 	w.Header().Set("Content-Type", "application/json")
@@ -33,6 +52,13 @@ func SendNotification(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	var err error
+
+	// Initialize MongoDB connection
+	if err = database.ConnectDB(); err != nil {
+		log.Fatal(err)
+	}
+
 	// Create a new mux router
 	r := mux.NewRouter()
 
@@ -42,6 +68,7 @@ func main() {
 	// Start the HTTP server
 	log.Println("Starting server on :8080")
 	if err := http.ListenAndServe(":8080", r); err != nil {
+		database.DisconnectDB()
 		log.Fatal(err)
 	}
 }
