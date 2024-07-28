@@ -8,22 +8,19 @@ import (
 
 	"github.com/gorilla/mux"
 	"henricovilela.com/rabbit_api/database"
+	"henricovilela.com/rabbit_api/rabbit"
 )
 
-type Notification struct {
-	UserId      string `json:"userId"`
-	Application string `json:"application"`
-	Message     string `json:"message"`
-}
-
 func SendNotification(w http.ResponseWriter, r *http.Request) {
-	var notification Notification
+	var notification rabbit.Notification
 
 	// Decode the JSON request body into the notification struct
 	if err := json.NewDecoder(r.Body).Decode(&notification); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
+	err := rabbit.SendMessage(notification)
 
 	// Create the audit log entry
 	auditLog := database.AuditLog{
@@ -33,10 +30,8 @@ func SendNotification(w http.ResponseWriter, r *http.Request) {
 		Timestamp:   time.Now(),
 		IP:          r.RemoteAddr,
 		UserAgent:   r.UserAgent(),
+		Success:     err == nil,
 	}
-
-	// Log the received notification
-	log.Printf("Received notification: %+v", notification)
 
 	// Start a goroutine to insert the audit log into MongoDB asynchronously
 	go func() {
@@ -44,6 +39,13 @@ func SendNotification(w http.ResponseWriter, r *http.Request) {
 			log.Printf("Failed to save audit log: %v", err)
 		}
 	}()
+
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"erro": err.Error()})
+		return
+	}
 
 	// Send a response
 	w.Header().Set("Content-Type", "application/json")
@@ -80,6 +82,7 @@ func main() {
 	log.Println("Starting server on :8080")
 	if err := http.ListenAndServe(":8080", r); err != nil {
 		database.DisconnectDB()
+		rabbit.Disconnect()
 		log.Fatal(err)
 	}
 }

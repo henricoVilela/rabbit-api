@@ -21,6 +21,7 @@ type AuditLog struct {
 	Message     string             `bson:"message"`
 	Timestamp   time.Time          `bson:"timestamp"`
 	IP          string             `bson:"ip"`
+	Success     bool               `bson:"success"`
 }
 
 func ConnectDB() error {
@@ -41,7 +42,7 @@ func ConnectDB() error {
 	}
 
 	db = client.Database("notificationDB")
-	log.Println("Connected to MongoDB")
+	log.Println("Conectado ao MongoDB")
 
 	return nil
 }
@@ -65,6 +66,7 @@ func InsertAuditLog(log AuditLog) error {
 		"timestamp":   log.Timestamp,
 		"ip":          log.IP,
 		"userAgent":   log.UserAgent,
+		"success":     log.Success,
 	})
 
 	return err
