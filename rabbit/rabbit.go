@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -19,9 +20,14 @@ type Notification struct {
 var EXCHANGE_NAME = "apps_notify"
 var connRb *amqp.Connection
 
+var (
+	timer              *time.Timer
+	inactivityDuration = 5 * time.Minute // Defina a duração de inatividade desejada
+)
+
 func SendMessage(n Notification) error {
 
-	if err := Connect(); err != nil {
+	if err := useConnection(); err != nil {
 		return err
 	}
 
@@ -113,7 +119,7 @@ func initQueueAndBind(ch *amqp.Channel, n Notification) error {
 	return nil
 }
 
-func Connect() error {
+func connect() error {
 	var err error
 
 	if connRb == nil || (connRb != nil && connRb.IsClosed()) {
@@ -132,5 +138,26 @@ func Connect() error {
 func Disconnect() {
 	if connRb != nil {
 		connRb.Close()
+		connRb = nil
+
+		log.Println("Conexão foi fechada")
 	}
+}
+
+func resetTimer() {
+	if timer != nil {
+		timer.Stop()
+	}
+
+	timer = time.AfterFunc(inactivityDuration, func() {
+		Disconnect()
+	})
+}
+
+func useConnection() error {
+	resetTimer()
+	if connRb == nil {
+		return connect() // Substitua pela lógica para criar sua conexão
+	}
+	return nil
 }
